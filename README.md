@@ -1,45 +1,119 @@
-# AI-agent-for-personalized-Stock-trading-and-market-advisory
+# TradeMind AI – Backend
 
-## 🌟 Key Features
+## Overview
 
-* **Multi-Agent Orchestration**: Specialized agents for Technical Analysis, News Sentiment, and Portfolio Risk.
-* **Sentiment Synthesis**: Scans global news and social feeds to quantify market "fear and greed."
-* **Technical Suite**: Automated calculation of indicators including RSI, MACD, and Bollinger Bands.
-* **Risk-First Advisory**: Every recommendation includes a calculated Stop-Loss and Take-Profit target.
-* **Backtesting Engine**: Evaluate agent performance against historical data before going live.
+The backend powers the core functionality of TradeMind AI by handling stock data retrieval, user interactions, API services, and communication with AI prediction models.
 
 ---
 
-## 🏗️ Tech Stack
+# Key Features
 
-* **Framework**: [LangChain / CrewAI / AutoGen]
-* **LLMs**: OpenAI GPT-4o / Claude 3.5 Sonnet
-* **Data Ingestion**: yFinance, Alpha Vantage, NewsAPI
-* **Analysis**: Pandas, NumPy, TA-Lib
-* **Interface**: Streamlit / FastAPI
+## 1. Stock Data API
 
----
+Provides endpoints to fetch stock information for analysis and prediction.
 
-## 🛡️ Risk Disclaimer
+**Capabilities**
 
-**Important:** This project is for **educational and research purposes only**.
-
-* It is not financial advice.
-* The creators are not responsible for any financial losses incurred through the use of this software.
-* Automated trading carries significant risks; always use a "Paper Trading" environment for testing.
+* Retrieve historical stock data
+* Fetch real-time market updates
+* Support multiple stock symbols
 
 ---
 
-## 🤝 Contributing
+## 2. Prediction Request Handling
 
-1. Fork the Project.
-2. Create your Feature Branch (`git checkout -b feature/NewAlpha`).
-3. Commit your Changes (`git commit -m 'Add new technical indicator'`).
-4. Push to the Branch (`git push origin feature/NewAlpha`).
-5. Open a Pull Request.
+The backend receives prediction requests from the frontend and forwards the processed data to the AI models.
+
+**Capabilities**
+
+* Accept stock prediction requests
+* Validate input parameters
+* Return model predictions through APIs
 
 ---
 
-## 📄 License
+## 3. User Risk Profiling
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Collects and processes user information to determine risk tolerance and investment preferences.
+
+**Capabilities**
+
+* Risk tolerance classification
+* Investor profile generation
+* Input validation for financial parameters
+
+---
+
+## 4. Data Processing Layer
+
+Handles preprocessing of stock market data before sending it to AI models.
+
+**Capabilities**
+
+* Data cleaning
+* Missing value handling
+* Feature preparation
+
+---
+
+## 5. AI Model Integration
+
+Acts as a bridge between the AI models and the frontend.
+
+**Capabilities**
+
+* Send processed data to models
+* Receive predictions
+* Format results for frontend use
+
+---
+
+# Tech Stack
+
+* Python
+* FastAPI / Flask
+* Pandas
+* NumPy
+* REST APIs
+
+---
+
+# Running the Backend
+
+Install dependencies
+
+pip install -r requirements.txt
+
+Start the server
+
+uvicorn main:app --reload
+
+Server runs on:
+
+http://localhost:8000
+
+---
+
+# API Examples
+
+Get stock data
+
+GET /api/stocks/{symbol}
+
+Predict stock price
+
+POST /api/predict
+
+Generate risk profile
+
+POST /api/risk-profile
+
+---
+
+# Future Features
+
+* Real-time market streaming
+* Portfolio tracking APIs
+* User authentication system
+* Advanced analytics endpoints
+
