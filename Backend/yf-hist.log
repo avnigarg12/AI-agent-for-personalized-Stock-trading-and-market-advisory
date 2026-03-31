@@ -1,0 +1,3 @@
+START LOG\nTesting historical fetch for MSFT, 1M\nHistorical Error: \n{
+  "name": "InvalidOptionsError"
+}\n\nTesting chart fetch for MSFT, 1D\nChart Error: \n{}\n
