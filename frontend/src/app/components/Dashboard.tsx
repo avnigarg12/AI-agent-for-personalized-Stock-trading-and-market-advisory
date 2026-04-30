@@ -8,6 +8,7 @@ import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 import { trendingStocks, marketNews, aiInsights as mockAiInsights, userProfile, generatePriceHistory } from "../data/mockData";
 import { Badge } from "./ui/badge";
 import { formatCurrency, getCurrencySymbol } from "../utils/formatters";
+import { API_ENDPOINTS } from "../apiConfig";
 
 export function Dashboard() {
   const [liveNews, setLiveNews] = useState(marketNews);
@@ -34,7 +35,7 @@ export function Dashboard() {
 
     const fetchNews = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/news');
+        const res = await fetch(`${API_ENDPOINTS.NEWS}`);
         if (res.ok) {
           const data = await res.json();
           if (data.length > 0) setLiveNews(data);
@@ -48,7 +49,7 @@ export function Dashboard() {
     const fetchInsights = async () => {
       setInsightsLoading(true);
       try {
-        const res = await fetch('http://localhost:5000/api/insights');
+        const res = await fetch(`${API_ENDPOINTS.INSIGHTS}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.insights?.length > 0) {
@@ -64,7 +65,29 @@ export function Dashboard() {
     fetchInsights();
   }, []);
 
-  const portfolioHistory = generatePriceHistory(profile.portfolioValue, 30);
+  const generateTrendedHistory = (startValue: number, endValue: number, days: number = 30) => {
+    const data = [];
+    const today = new Date();
+    
+    for (let i = days; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      
+      // Calculate linear interpolation + random noise
+      const progress = (days - i) / days;
+      const baseValue = startValue + (endValue - startValue) * progress;
+      // Add some realistic noise (wobble)
+      const noise = (Math.random() - 0.5) * (Math.abs(endValue - startValue) * 0.1 || startValue * 0.01);
+      
+      data.push({
+        date: date.toISOString().split('T')[0],
+        value: parseFloat((baseValue + noise).toFixed(2))
+      });
+    }
+    return data;
+  };
+
+  const portfolioHistory = generateTrendedHistory(profile.totalInvested, profile.portfolioValue, 30);
 
   const totalGainLoss = profile.portfolioValue - profile.totalInvested;
   const totalGainLossPercent = ((totalGainLoss / profile.totalInvested) * 100).toFixed(2);
@@ -260,156 +283,46 @@ export function Dashboard() {
           
 
           <div className="absolute inset-0 z-10 w-full h-full overflow-hidden">
-             
-            <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 1000 400">
-              <defs>
-                 <linearGradient id="glowgrad" x1="0" y1="1" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#f97316" stopOpacity="0" />
-                  <stop offset="30%" stopColor="#ea580c" stopOpacity="0.8" />
-                  <stop offset="70%" stopColor="#f59e0b" stopOpacity="1" />
-                  <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
-                </linearGradient>
-                <filter id="ultra-glow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="15" result="blur1" />
-                  <feGaussianBlur stdDeviation="6" result="blur2" />
-                  <feMerge>
-                    <feMergeNode in="blur1"/>
-                    <feMergeNode in="blur2"/>
-                    <feMergeNode in="SourceGraphic"/>
-                  </feMerge>
-                </filter>
-                <filter id="white-core">
-                  <feGaussianBlur stdDeviation="2" result="blur"/>
-                  <feMerge>
-                    <feMergeNode in="blur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                  </feMerge>
-                </filter>
-                {/* 3D Glass Bar Gradient (Dark Mode) */}
-                <linearGradient id="bar-grad-dark" x1="0" y1="0" x2="1" y2="0">
-                   <stop offset="0%" stopColor="#ffffff" stopOpacity="0.3" />
-                   <stop offset="20%" stopColor="#ffffff" stopOpacity="0.1" />
-                   <stop offset="80%" stopColor="#ffffff" stopOpacity="0.1" />
-                   <stop offset="100%" stopColor="#000000" stopOpacity="0.5" />
-                </linearGradient>
-                {/* 3D Glass Bar Gradient (Light Mode) */}
-                <linearGradient id="bar-grad-light" x1="0" y1="0" x2="1" y2="0">
-                   <stop offset="0%" stopColor="#6366f1" stopOpacity="0.3" />
-                   <stop offset="20%" stopColor="#6366f1" stopOpacity="0.1" />
-                   <stop offset="80%" stopColor="#6366f1" stopOpacity="0.1" />
-                   <stop offset="100%" stopColor="#312e81" stopOpacity="0.5" />
-                </linearGradient>
-                <marker id="neonArrow-dark" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-                   <path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" filter="url(#white-core)"/>
-                </marker>
-                <marker id="neonArrow-light" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-                   <path d="M 0 1 L 10 5 L 0 9 z" fill="#4f46e5" filter="url(#white-core)"/>
-                </marker>
-              </defs>
-
-              {/* High-Fidelity 3D Pillars (Dark Mode) */}
-              <g className="hidden dark:block relative" opacity="0.8">
-                 <rect x="50" y="300" width="50" height="150" fill="url(#bar-grad-dark)" stroke="#ffffff20" strokeWidth="1" />
-                 <polygon points="50,300 75,285 125,285 100,300" fill="#ffffff40" />
-                 <rect x="180" y="270" width="60" height="180" fill="url(#bar-grad-dark)" stroke="#ffffff20" strokeWidth="1" />
-                 <polygon points="180,270 210,250 270,250 240,270" fill="#ffffff50" />
-                 <rect x="330" y="210" width="70" height="240" fill="url(#bar-grad-dark)" stroke="#ffffff20" strokeWidth="1" />
-                 <polygon points="330,210 365,185 435,185 400,210" fill="#ffffff60" />
-                 <rect x="520" y="140" width="80" height="310" fill="url(#bar-grad-dark)" stroke="#ffffff20" strokeWidth="1" />
-                 <polygon points="520,140 560,110 640,110 600,140" fill="#ffffff80" />
-                 <rect x="730" y="100" width="90" height="350" fill="url(#bar-grad-dark)" stroke="#ffffff20" strokeWidth="1" />
-                 <polygon points="730,100 775,65 865,65 820,100" fill="#ffffff90" />
-              </g>
-
-              {/* High-Fidelity 3D Pillars (Light Mode) */}
-              <g className="block dark:hidden relative" opacity="0.3">
-                 <rect x="50" y="300" width="50" height="150" fill="url(#bar-grad-light)" stroke="#6366f120" strokeWidth="1" />
-                 <polygon points="50,300 75,285 125,285 100,300" fill="#6366f140" />
-                 <rect x="180" y="270" width="60" height="180" fill="url(#bar-grad-light)" stroke="#6366f120" strokeWidth="1" />
-                 <polygon points="180,270 210,250 270,250 240,270" fill="#6366f150" />
-                 <rect x="330" y="210" width="70" height="240" fill="url(#bar-grad-light)" stroke="#6366f120" strokeWidth="1" />
-                 <polygon points="330,210 365,185 435,185 400,210" fill="#6366f160" />
-                 <rect x="520" y="140" width="80" height="310" fill="url(#bar-grad-light)" stroke="#6366f120" strokeWidth="1" />
-                 <polygon points="520,140 560,110 640,110 600,140" fill="#6366f180" />
-                 <rect x="730" y="100" width="90" height="350" fill="url(#bar-grad-light)" stroke="#6366f120" strokeWidth="1" />
-                 <polygon points="730,100 775,65 865,65 820,100" fill="#6366f190" />
-              </g>
-
-              {/* The Glowing Moving Chart Line (Dark Mode) */}
-              <g className="hidden dark:block">
-                <path d="M -50 480 L 80 290 L 160 320 L 250 180 L 320 220 L 450 120 L 520 180 L 700 80 L 780 120 L 980 20 L 1050 -20" fill="none" stroke="url(#glowgrad)" strokeWidth="20" strokeLinejoin="miter" strokeLinecap="square" filter="url(#ultra-glow)" strokeDasharray="3000" strokeDashoffset="3000">
-                  <animate attributeName="stroke-dashoffset" values="3000;0" dur="2.5s" fill="freeze" calcMode="spline" keySplines="0.2 0 0.1 1" keyTimes="0;1" />
-                </path>
-                <path d="M -50 480 L 80 290 L 160 320 L 250 180 L 320 220 L 450 120 L 520 180 L 700 80 L 780 120 L 980 20 L 1050 -20" fill="none" stroke="#ffffff" strokeWidth="5" strokeLinejoin="miter" strokeLinecap="square" filter="url(#white-core)" markerEnd="url(#neonArrow-dark)" strokeDasharray="3000" strokeDashoffset="3000">
-                  <animate attributeName="stroke-dashoffset" values="3000;0" dur="2.5s" fill="freeze" calcMode="spline" keySplines="0.2 0 0.1 1" keyTimes="0;1" />
-                </path>
-              </g>
-
-              {/* The Glowing Moving Chart Line (Light Mode) */}
-              <g className="block dark:hidden">
-                <path d="M -50 480 L 80 290 L 160 320 L 250 180 L 320 220 L 450 120 L 520 180 L 700 80 L 780 120 L 980 20 L 1050 -20" fill="none" stroke="#4f46e5" strokeOpacity="0.3" strokeWidth="20" strokeLinejoin="miter" strokeLinecap="square" filter="url(#ultra-glow)" strokeDasharray="3000" strokeDashoffset="3000">
-                  <animate attributeName="stroke-dashoffset" values="3000;0" dur="2.5s" fill="freeze" calcMode="spline" keySplines="0.2 0 0.1 1" keyTimes="0;1" />
-                </path>
-                <path d="M -50 480 L 80 290 L 160 320 L 250 180 L 320 220 L 450 120 L 520 180 L 700 80 L 780 120 L 980 20 L 1050 -20" fill="none" stroke="#4f46e5" strokeWidth="5" strokeLinejoin="miter" strokeLinecap="square" filter="url(#white-core)" markerEnd="url(#neonArrow-light)" strokeDasharray="3000" strokeDashoffset="3000">
-                  <animate attributeName="stroke-dashoffset" values="3000;0" dur="2.5s" fill="freeze" calcMode="spline" keySplines="0.2 0 0.1 1" keyTimes="0;1" />
-                </path>
-              </g>
-            </svg>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={portfolioHistory}>
+                <defs>
+                  <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={totalGainLoss >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor={totalGainLoss >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <Area 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke={totalGainLoss >= 0 ? "#22c55e" : "#ef4444"} 
+                  fillOpacity={1} 
+                  fill="url(#colorProfit)" 
+                  strokeWidth={4}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
 
           <div className="absolute top-8 left-8 z-20">
              <div className="flex items-center gap-3 bg-card/40 backdrop-blur-md px-4 py-2 rounded-xl border border-border/50 mb-2 shadow-sm">
-               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-               <span className="text-foreground font-bold tracking-widest text-sm">USDT / USD</span>
+               <div className={`w-2 h-2 rounded-full animate-pulse ${totalGainLoss >= 0 ? 'bg-green-500' : 'bg-red-500'}`} />
+               <span className="text-foreground font-bold tracking-widest text-sm">PORTFOLIO PERFORMANCE</span>
              </div>
              <p className="text-6xl font-black text-foreground tabular-nums drop-shadow-md">
-                $2,148<span className="text-2xl text-green-500 ml-2">▲ 41.5%</span>
+                {formatCurrency(totalGainLoss)}
+                <span className={`text-2xl ml-2 ${totalGainLoss >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {totalGainLoss >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(totalGainLossPercent))}%
+                </span>
              </p>
-             <p className="text-xl text-primary font-bold mt-2 tracking-wide uppercase drop-shadow-sm">
-                Profit Generating...
+             <p className={`text-xl font-bold mt-2 tracking-wide uppercase drop-shadow-sm ${totalGainLoss >= 0 ? 'text-primary' : 'text-red-400'}`}>
+                {totalGainLoss >= 0 ? 'Profit Generating...' : 'Portfolio Correction...'}
              </p>
           </div>
 
         </Card>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-        {/* Right Section (Full Width Now) - Hot Trending */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }} className="lg:col-span-2 h-full">
-          <Card className="p-8 premium-card h-full flex flex-col">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-primary flex items-center gap-2">
-                <TrendingUp className="w-6 h-6" />
-                Hot Trending Stocks
-              </h3>
-              <Badge variant="outline" className="text-xs font-black border-primary/30 text-primary/80">LIVE UPDATES</Badge>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
-              {trendingStocks.map((stock) => (
-                <div key={stock.symbol} className="group flex items-center justify-between p-4 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/10 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="flex items-center gap-4 relative z-10">
-                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center font-black text-primary group-hover:scale-110 hover:rotate-12 transition-transform">
-                      {stock.symbol[0]}
-                    </div>
-                    <div>
-                      <p className="font-black text-base tracking-tight">{stock.symbol}</p>
-                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">{stock.name}</p>
-                    </div>
-                  </div>
-                  <div className="text-right relative z-10">
-                    <p className="font-black text-base tabular-nums">{formatCurrency(stock.price, stock.currency, stock.symbol)}</p>
-                    <p className={`text-sm font-black mt-1 ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {stock.changePercent >= 0 ? '🚀' : '🔻'} {Math.abs(stock.changePercent).toFixed(2)}%
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </motion.div>
-      </div>
 
       </div>
     </div>

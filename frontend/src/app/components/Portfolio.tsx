@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, DollarSign, Wallet, Activity, Lightbulb, Load
 import { userProfile } from "../data/mockData";
 import { Badge } from "./ui/badge";
 import { formatCurrency } from "../utils/formatters";
+import { API_ENDPOINTS } from "../apiConfig";
 
 // Types
 interface Holding {
@@ -56,15 +57,27 @@ export function Portfolio() {
     let updatedHoldings = [...currentHoldings];
 
     try {
-      // 1. Fetch live quotes
-      const symbols = currentHoldings.map(h => h.symbol).join(",");
-      const res = await fetch(`http://localhost:5000/api/market/quotes?symbols=${symbols}`);
-      if (res.ok) {
-        const liveQuotes = await res.json();
+      // 1. Fetch live quotes using correct individual symbol endpoints
+      const quotesPromises = currentHoldings.map(async (holding) => {
+        try {
+          const res = await fetch(`${API_ENDPOINTS.MARKET}/quote/${holding.symbol}`);
+          if (res.ok) {
+            return await res.json();
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch quote for ${holding.symbol}`);
+        }
+        return null;
+      });
+      
+      const liveQuotesArray = await Promise.all(quotesPromises);
+      const liveQuotes = liveQuotesArray.filter(Boolean);
+      
+      if (liveQuotes.length > 0) {
         updatedHoldings = currentHoldings.map(holding => {
           const liveQuote = liveQuotes.find((q: any) => q.symbol === holding.symbol);
           if (liveQuote) {
-            const currentPrice = liveQuote.price;
+            const currentPrice = liveQuote.price || holding.avgCost; // Fallback to avgCost if error
             const totalValue = holding.shares * currentPrice;
             const gainLoss = totalValue - (holding.shares * holding.avgCost);
             const gainLossPercent = (gainLoss / (holding.shares * holding.avgCost)) * 100;
@@ -74,10 +87,21 @@ export function Portfolio() {
         });
         setHoldings(updatedHoldings);
         localStorage.setItem("user_portfolio", JSON.stringify(updatedHoldings));
+        
+        // Update global profile metrics
+        const totalV = updatedHoldings.reduce((sum, h) => sum + h.totalValue, 0);
+        const totalI = updatedHoldings.reduce((sum, h) => sum + (h.shares * h.avgCost), 0);
+        const storedProfile = localStorage.getItem('investorProfile');
+        if (storedProfile) {
+          const p = JSON.parse(storedProfile);
+          p.currentValue = totalV.toString();
+          p.investedAmount = totalI.toString();
+          localStorage.setItem('investorProfile', JSON.stringify(p));
+        }
       }
 
       // 2. Fetch AI Recommendations
-      const recommendRes = await fetch(`http://localhost:5000/api/portfolio/recommend`, {
+      const recommendRes = await fetch(`${API_ENDPOINTS.PORTFOLIO}/recommend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ holdings: updatedHoldings })
@@ -159,7 +183,7 @@ export function Portfolio() {
       <div className="relative z-10 w-full max-w-[1400px] mx-auto space-y-8">
         
         {/* Top Metrics Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <Card className="p-6 premium-card group">
               <div className="flex items-center justify-between mb-4">
@@ -181,34 +205,6 @@ export function Portfolio() {
                 </div>
               </div>
               <p className="text-3xl font-black text-foreground tabular-nums">{formatCurrency(totalInvestedAmount)}</p>
-            </Card>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <Card className="p-6 premium-card group">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground/70">Profit / Loss</p>
-                <div className={`p-2 rounded-xl group-hover:scale-110 transition-transform ${totalProfitLoss >= 0 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                  {totalProfitLoss >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                </div>
-              </div>
-              <p className={`text-3xl font-black tabular-nums ${totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {totalProfitLoss >= 0 ? '+' : ''}{formatCurrency(totalProfitLoss)}
-              </p>
-            </Card>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-            <Card className="p-6 premium-card group">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground/70">Total Return</p>
-                <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400 group-hover:scale-110 transition-transform">
-                  <Activity className="w-5 h-5" />
-                </div>
-              </div>
-              <p className={`text-3xl font-black tabular-nums ${parseFloat(returnPercentage) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {parseFloat(returnPercentage) >= 0 ? '+' : ''}{returnPercentage}%
-              </p>
             </Card>
           </motion.div>
         </div>
@@ -242,7 +238,7 @@ export function Portfolio() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 block">Average Buy Price ($)</label>
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 block">Buy Price</label>
                   <input
                     type="number"
                     value={newAvgCost}
@@ -265,7 +261,7 @@ export function Portfolio() {
           <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.6 }} className="lg:col-span-2 flex flex-col gap-4">
             <h3 className="text-xl font-black text-foreground mb-2 flex items-center gap-2">
               <Lightbulb className="w-6 h-6 text-indigo-400" />
-              Personalized AI Advisory
+              Personalized AI Recommendations
               {insightsLoading && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground ml-2" />}
             </h3>
             
@@ -293,7 +289,7 @@ export function Portfolio() {
                             {insight.type === 'alert' && <Badge className="bg-yellow-500/20 text-yellow-400 border-none">ALERT</Badge>}
                             {insight.type === 'tip' && <Badge className="bg-blue-500/20 text-blue-400 border-none">HOLD/TIP</Badge>}
                           </div>
-                          <p className="text-muted-foreground font-bold text-sm leading-relaxed mb-4 flex-1">
+                          <p className="text-muted-foreground font-bold text-sm leading-relaxed mb-4 flex-1 whitespace-pre-wrap">
                             {insight.message}
                           </p>
                           {insight.stocks && insight.stocks.length > 0 && (
@@ -328,11 +324,12 @@ export function Portfolio() {
                 <table className="w-full">
                     <thead>
                     <tr className="bg-white/5">
-                        <th className="text-left p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Asset Name</th>
+                        <th className="text-left p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Asset</th>
                         <th className="text-right p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Shares</th>
-                        <th className="text-right p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Avg Cost</th>
-                        <th className="text-right p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Market Price</th>
-                        <th className="text-right p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Total Value</th>
+                        <th className="text-right p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Buy Price</th>
+                        <th className="text-right p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Current Price</th>
+                        <th className="text-right p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Invested Value</th>
+                        <th className="text-right p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Current Value</th>
                         <th className="text-center p-6 font-black text-muted-foreground text-[11px] uppercase tracking-widest">Actions</th>
                     </tr>
                     </thead>
@@ -345,16 +342,16 @@ export function Portfolio() {
                         </td>
                         <td className="p-6 text-right font-black tabular-nums">{holding.shares}</td>
                         <td className="p-6 text-right font-black tabular-nums text-muted-foreground">
-                            {formatCurrency(holding.avgCost, 'USD')}
+                            {formatCurrency(holding.avgCost, undefined, holding.symbol)}
                         </td>
                         <td className="p-6 text-right font-black tabular-nums">
-                            {formatCurrency(holding.currentPrice, 'USD')}
+                            {formatCurrency(holding.currentPrice, undefined, holding.symbol)}
                         </td>
-                        <td className="p-6 text-right">
-                            <div className="font-black tabular-nums text-foreground">{formatCurrency(holding.totalValue, 'USD')}</div>
-                            <div className={`text-xs font-black mt-1 ${holding.gainLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {holding.gainLoss >= 0 ? '▲' : '▼'} {Math.abs(holding.gainLossPercent).toFixed(2)}%
-                            </div>
+                        <td className="p-6 text-right font-black tabular-nums">
+                            {formatCurrency(holding.shares * holding.avgCost, undefined, holding.symbol)}
+                        </td>
+                        <td className="p-6 text-right font-black tabular-nums text-foreground">
+                            {formatCurrency(holding.totalValue, undefined, holding.symbol)}
                         </td>
                         <td className="p-6 text-center">
                             <button

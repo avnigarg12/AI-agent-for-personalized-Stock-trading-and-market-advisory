@@ -4,13 +4,15 @@ import { Card } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
-import { Eye, EyeOff, TrendingUp } from "lucide-react";
+import { Eye, EyeOff, TrendingUp, Loader2 } from "lucide-react";
 import { AttractiveBackground } from "../AttractiveBackground";
 import { ThemeToggle } from "../ThemeToggle";
+import { API_ENDPOINTS } from "../../apiConfig";
 
 export function Signup() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -42,20 +44,50 @@ export function Signup() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (validateForm()) {
-      // Store user data in localStorage (in real app, this would be an API call)
-      localStorage.setItem('user', JSON.stringify({
-        fullName: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
-        isNewUser: true
-      }));
-      
-      // Redirect to onboarding
-      navigate('/onboarding');
+      setLoading(true);
+      try {
+        const response = await fetch(`${API_ENDPOINTS.AUTH}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: formData.fullName,
+            email: formData.email,
+            password: formData.password
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify({
+            fullName: data.user.name,
+            email: data.user.email,
+            phone: formData.phone,
+            isNewUser: true
+          }));
+          
+          navigate('/onboarding');
+        } else {
+          setErrors({ auth: data.error || "Registration failed" });
+        }
+      } catch (error) {
+        console.warn("Signup API failed, falling back to Demo Mode:", error);
+        // DEMO FALLBACK: Allow signup if server is offline
+        localStorage.setItem('user', JSON.stringify({
+          fullName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          isNewUser: true
+        }));
+        navigate('/onboarding');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -89,13 +121,18 @@ export function Signup() {
               <TrendingUp className="w-10 h-10 text-white" />
             </div>
             <h1 className="text-6xl font-black bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent drop-shadow-sm tracking-tight text-foreground">
-              TradeAI
+              TradeMind AI
             </h1>
           </div>
           <p className="text-muted-foreground text-xl font-medium">Create your premium account to get started</p>
         </div>
 
         <Card className="p-10 bg-card/90 backdrop-blur-xl border-border/50 shadow-[0_0_50px_rgba(0,0,0,0.3)] premium-card rounded-3xl">
+          {errors.auth && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-red-500 text-sm font-bold text-center">
+              {errors.auth}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Full Name */}
             <div>
@@ -179,8 +216,12 @@ export function Signup() {
             </div>
 
             {/* Submit Button */}
-            <Button type="submit" className="w-full mt-8 h-16 text-xl font-black rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-xl shadow-primary/20 hover:scale-[1.02] transition-transform">
-              Create Account
+            <Button 
+              type="submit" 
+              disabled={loading}
+              className="w-full mt-8 h-16 text-xl font-black rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-xl shadow-primary/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Create Account"}
             </Button>
           </form>
 

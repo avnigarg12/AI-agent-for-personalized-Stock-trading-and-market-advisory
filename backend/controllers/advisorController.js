@@ -1,38 +1,37 @@
 const aiIntegrationService = require('../services/aiIntegrationService');
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1/models';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Try models in order of preference (same pattern as insightsController)
-// gemini-1.5-flash-8b has 4000 RPM on free tier — try it first to avoid quota issues
-const MODELS = ['gemini-1.5-flash-8b', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+async function callGroq(prompt) {
+    if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY is not defined in .env');
+    try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${GROQ_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7,
+                max_tokens: 1024
+            })
+        });
 
-async function callGemini(prompt) {
-    for (const model of MODELS) {
-        try {
-            const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.75, maxOutputTokens: 1024 }
-                })
-            });
-
-            if (!res.ok) {
-                const errBody = await res.json().catch(() => ({}));
-                console.warn(`Model ${model} failed (${res.status}):`, errBody?.error?.message);
-                continue;
-            }
-
-            const data = await res.json();
-            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) return { text, model };
-        } catch (err) {
-            console.warn(`Model ${model} threw error:`, err.message);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err?.error?.message || `Groq API Error: ${res.status}`);
         }
+
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (!text) throw new Error('Empty response from Groq');
+        return { text, model: 'llama-3.3-70b-versatile' };
+    } catch (err) {
+        console.warn(`Groq API threw error:`, err.message);
+        throw err;
     }
-    throw new Error('All Gemini models failed or quota exhausted');
 }
 
 // Stock-domain keywords for server-side validation
@@ -229,12 +228,12 @@ exports.chatWithAdvisor = async (req, res) => {
         let profileSection = 'No profile available.';
         if (userProfile) {
             profileSection = [
-                userProfile.risk_preference     ? `- Risk Preference: ${userProfile.risk_preference}`         : null,
-                userProfile.investment_horizon  ? `- Investment Horizon: ${userProfile.investment_horizon}`   : null,
-                userProfile.financial_goal      ? `- Financial Goal: ${userProfile.financial_goal}`           : null,
-                userProfile.investment_amount   ? `- Investment Amount: ₹${userProfile.investment_amount}`    : null,
-                userProfile.monthly_income      ? `- Monthly Income: ₹${userProfile.monthly_income}`         : null,
-                userProfile.age                 ? `- Age: ${userProfile.age}`                                 : null,
+                userProfile.risk_preference ? `- Risk Preference: ${userProfile.risk_preference}` : null,
+                userProfile.investment_horizon ? `- Investment Horizon: ${userProfile.investment_horizon}` : null,
+                userProfile.financial_goal ? `- Financial Goal: ${userProfile.financial_goal}` : null,
+                userProfile.investment_amount ? `- Investment Amount: ₹${userProfile.investment_amount}` : null,
+                userProfile.monthly_income ? `- Monthly Income: ₹${userProfile.monthly_income}` : null,
+                userProfile.age ? `- Age: ${userProfile.age}` : null,
             ].filter(Boolean).join('\n');
         }
 
@@ -293,7 +292,7 @@ ${wantsStructured ? `6. Because this question is about a specific action (buy/se
   }
 }
 Respond ONLY with the JSON object, no markdown fences, no extra text.` :
-`6. Respond ONLY with a JSON object:
+                `6. Respond ONLY with a JSON object:
 {
   "answer": "<your conversational response>",
   "stocks": ["<any ticker symbols mentioned, or empty array>"],
@@ -304,19 +303,19 @@ Respond ONLY with the JSON object, no markdown fences, no extra text.`}`;
         // --- Call Gemini ---
         let parsed;
         try {
-            const { text, model: usedModel } = await callGemini(prompt);
-            console.log(`[AdvisorChat] Gemini response via model: ${usedModel}`);
+            const { text, model: usedModel } = await callGroq(prompt);
+            console.log(`[AdvisorChat] Groq response via model: ${usedModel}`);
 
             try {
                 const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
                 parsed = JSON.parse(cleaned);
             } catch (parseErr) {
-                console.warn('[AdvisorChat] Non-JSON response from Gemini, wrapping as plain answer.');
+                console.warn('[AdvisorChat] Non-JSON response from Groq, wrapping as plain answer.');
                 parsed = { answer: text.trim(), stocks: [], structuredData: null };
             }
-        } catch (geminiError) {
-            // Gemini quota exhausted — use smart rule-based fallback
-            console.warn('[AdvisorChat] Gemini unavailable, using smart fallback:', geminiError.message);
+        } catch (groqError) {
+            // Groq quota exhausted — use smart rule-based fallback
+            console.warn('[AdvisorChat] Groq unavailable, using smart fallback:', groqError.message);
             parsed = generateFallbackResponse(question, userProfile, holdings, stockData);
         }
 

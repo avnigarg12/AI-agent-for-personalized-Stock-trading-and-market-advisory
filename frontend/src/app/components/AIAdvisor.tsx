@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { Send, Bot, User, Lightbulb, Activity, Target, ShieldAlert } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
+import { API_ENDPOINTS } from "../apiConfig";
 
 interface StructuredData {
   recommendation: 'Buy' | 'Hold' | 'Avoid';
@@ -87,7 +88,7 @@ export function AIAdvisor() {
     }]);
 
     try {
-      const response = await fetch('http://localhost:5000/api/advisor/chat', {
+      const response = await fetch(`${API_ENDPOINTS.ADVISOR}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

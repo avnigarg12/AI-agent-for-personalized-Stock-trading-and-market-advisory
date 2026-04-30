@@ -17,13 +17,26 @@ exports.getTrendingStocks = async (req, res) => {
 exports.getStockQuote = async (req, res) => {
     try {
         const { symbol } = req.params;
-        const result = await aiIntegrationService.getMarketDataAction('quote', symbol);
-        
+        const upperSymbol = symbol.trim().toUpperCase();
+
+        // Try the symbol as-is first
+        let result = await aiIntegrationService.getMarketDataAction('quote', upperSymbol);
+
+        // If not found and no exchange suffix, try Indian exchanges (.NS then .BO)
+        if ((!result.success || result.data.error) && !upperSymbol.includes('.')) {
+            for (const suffix of ['.NS', '.BO']) {
+                const indResult = await aiIntegrationService.getMarketDataAction('quote', upperSymbol + suffix);
+                if (indResult.success && !indResult.data.error) {
+                    result = indResult;
+                    break;
+                }
+            }
+        }
+
         if (result.success && !result.data.error) {
             res.json(result.data);
         } else {
-            // Provide a fallback or return the error
-            res.status(404).json({ error: `Could not find data for ${symbol}` });
+            res.status(404).json({ error: `Could not find data for ${upperSymbol}` });
         }
     } catch (error) {
         console.error('Error fetching stock quote:', error);
@@ -34,17 +47,39 @@ exports.getStockQuote = async (req, res) => {
 exports.searchStocks = async (req, res) => {
     try {
         const { query } = req.query;
-        // For search, we can still use a limited set or a search API if available
-        // For now, let's use the quote action if they search for a specific symbol
-        if (query.length <= 5 && /^[A-Z.]+$/.test(query.toUpperCase())) {
-            const result = await aiIntegrationService.getMarketDataAction('quote', query.toUpperCase());
+        if (!query) return res.json([]);
+
+        const upperQuery = query.trim().toUpperCase();
+        const results = [];
+
+        // If user already provided a suffix (.NS, .BO, etc.) just look up directly
+        if (upperQuery.includes('.')) {
+            const result = await aiIntegrationService.getMarketDataAction('quote', upperQuery);
             if (result.success && !result.data.error) {
-                return res.json([result.data]);
+                results.push(result.data);
             }
+            return res.json(results);
         }
-        
-        // Default search logic (could be improved with a real search API)
-        res.json([]);
+
+        // No suffix — try bare symbol (US) AND Indian exchanges in parallel
+        const [bareResult, nsResult, boResult] = await Promise.allSettled([
+            aiIntegrationService.getMarketDataAction('quote', upperQuery),
+            aiIntegrationService.getMarketDataAction('quote', upperQuery + '.NS'),
+            aiIntegrationService.getMarketDataAction('quote', upperQuery + '.BO'),
+        ]);
+
+        if (bareResult.status === 'fulfilled' && bareResult.value.success && !bareResult.value.data.error) {
+            results.push(bareResult.value.data);
+        }
+        if (nsResult.status === 'fulfilled' && nsResult.value.success && !nsResult.value.data.error) {
+            results.push(nsResult.value.data);
+        }
+        // Only add BSE result if NSE was not found (avoid duplicate)
+        if (results.length < 2 && boResult.status === 'fulfilled' && boResult.value.success && !boResult.value.data.error) {
+            results.push(boResult.value.data);
+        }
+
+        res.json(results);
     } catch (error) {
         console.error('Error searching stocks:', error);
         res.status(500).json({ error: 'Failed to search stocks' });

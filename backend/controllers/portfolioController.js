@@ -2,38 +2,38 @@ const InvestorProfile = require('../models/InvestorProfile');
 const GuestSession = require('../models/GuestSession');
 const aiIntegrationService = require('../services/aiIntegrationService');
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1/models';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Try models in order of preference
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+async function callGroq(prompt) {
+    if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY is not defined in .env');
+    try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${GROQ_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7,
+                max_tokens: 1024
+            })
+        });
 
-async function callGemini(prompt) {
-    for (const model of MODELS) {
-        try {
-            const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-                })
-            });
-
-            if (!res.ok) {
-                const errBody = await res.json().catch(() => ({}));
-                console.warn(`Model ${model} failed (${res.status}):`, errBody?.error?.message);
-                continue; // try next model
-            }
-
-            const data = await res.json();
-            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) return { text, model };
-        } catch (err) {
-            console.warn(`Model ${model} threw error:`, err.message);
+        if (!res.ok) {
+            const err = await res.json().catch(()=>({}));
+            throw new Error(err?.error?.message || `Groq API Error: ${res.status}`);
         }
+
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (!text) throw new Error('Empty response from Groq');
+        return { text, model: 'llama-3.3-70b-versatile' };
+    } catch (err) {
+        console.warn(`Groq API threw error:`, err.message);
+        throw err;
     }
-    throw new Error('All Gemini models failed or quota exhausted');
 }
 
 exports.savePortfolio = async (req, res) => {
@@ -213,9 +213,11 @@ exports.getGuestRecommendations = async (req, res) => {
 
     const portfolioSummary = enrichedHoldings
       .map(h => {
-        let text = `${h.symbol}: ${h.shares} shares @ $${h.avgCost.toFixed(2)} (Current: $${h.currentPrice.toFixed(2)}, Value: $${h.totalValue.toFixed(2)}, Gain/Loss: ${h.gainLossPercent.toFixed(2)}%)`;
+        const isIndian = h.symbol.toUpperCase().endsWith('.NS') || h.symbol.toUpperCase().endsWith('.BO') || ['RELIANCE', 'TCS', 'INFY', 'WIPRO', 'HDFCBANK', 'ITC', 'SBIN', 'ASIANPAINT', 'BAJFINANCE'].includes(h.symbol.toUpperCase());
+        const curr = isIndian ? '₹' : '$';
+        let text = `${h.symbol}: ${h.shares} shares @ ${curr}${h.avgCost.toFixed(2)} (Current: ${curr}${h.currentPrice.toFixed(2)}, Value: ${curr}${h.totalValue.toFixed(2)}, Gain/Loss: ${h.gainLossPercent.toFixed(2)}%)`;
         if (h.mlPredictedPrice) {
-          text += ` | LSTM Predicted Next Price: $${h.mlPredictedPrice.toFixed(2)}`;
+          text += ` | LSTM Predicted Next Price: ${curr}${h.mlPredictedPrice.toFixed(2)}`;
         }
         return text;
       })
@@ -223,7 +225,7 @@ exports.getGuestRecommendations = async (req, res) => {
 
     const prompt = `Analyze the user's portfolio and provide clear BUY, SELL, or HOLD recommendations for each stock.
 
-User Portfolio (Total Value: $${totalValue.toFixed(2)}):
+User Portfolio (Note: ₹ indicates Indian Rupees and $ indicates US Dollars):
 ${portfolioSummary}
 
 Instructions:
@@ -242,13 +244,13 @@ We need exactly one insight per stock in the user's portfolio. Output format mus
   "id": "1",
   "title": "<symbol> - BUY / SELL / HOLD",
   "type": "opportunity" (if BUY), "warning" (if SELL), or "tip" (if HOLD),
-  "message": "<clear and concise explanation>",
+  "message": "Predicted Price: <curr><LSTM predicted price or N/A>\nCurrent Price: <curr><current price>\nReason: <real time reason>",
   "stocks": ["<symbol>"]
 }`;
 
     try {
-      const { text, model: usedModel } = await callGemini(prompt);
-      console.log(`Gemini portfolio recommendations generated using model: ${usedModel}`);
+      const { text, model: usedModel } = await callGroq(prompt);
+      console.log(`Groq portfolio recommendations generated using model: ${usedModel}`);
 
       // Parse and validate the response
       let recommendations;
@@ -270,39 +272,59 @@ We need exactly one insight per stock in the user's portfolio. Output format mus
           }));
 
       } catch (parseError) {
-          console.error('Failed to parse Gemini response:', text);
+          console.error('Failed to parse Groq response:', text);
           throw new Error('AI returned invalid JSON');
       }
 
       res.json({ success: true, recommendations, generatedAt: new Date().toISOString() });
     } catch (apiError) {
-      console.warn('Gemini API exhausted or failed. Using logical fallback strategy.', apiError.message);
+      console.warn('Groq API exhausted or failed. Using logical fallback strategy.', apiError.message);
       
-      // Fallback: Generate logical recommendations based on Math alone without LLM
       const fallbackRecommendations = enrichedHoldings.map((h, idx) => {
+        const isIndian = h.symbol.toUpperCase().endsWith('.NS') || h.symbol.toUpperCase().endsWith('.BO') || ['RELIANCE', 'TCS', 'INFY', 'WIPRO', 'HDFCBANK', 'ITC', 'SBIN', 'ASIANPAINT', 'BAJFINANCE'].includes(h.symbol.toUpperCase());
+        const curr = isIndian ? '₹' : '$';
+
         let action = 'HOLD';
         let type = 'tip';
-        let reason = `Hold ${h.symbol}. Current price $${h.currentPrice.toFixed(2)} is stable compared to your cost basis.`;
+        let reasonText = `Price ${curr}${h.currentPrice.toFixed(2)} is stable compared to your cost.`;
+        let confValue = '75%';
+        let predPrice = 'N/A';
+        const currentPriceStr = `${curr}${h.currentPrice.toFixed(2)}`;
         
-        if (h.gainLossPercent < -10) {
+        if (h.mlPredictedPrice) {
+           const pct = (Math.abs(h.mlPredictedPrice - h.currentPrice) / h.currentPrice) * 100;
+           predPrice = `${curr}${h.mlPredictedPrice.toFixed(2)}`;
+           
+           if (pct > 2 && h.mlPredictedPrice > h.currentPrice) {
+               action = 'BUY';
+               type = 'opportunity';
+               reasonText = `LSTM predicts an upward target of ${predPrice} (+${pct.toFixed(1)}%). Consider adding at current levels.`;
+           } else if (pct > 2 && h.mlPredictedPrice < h.currentPrice) {
+               action = 'SELL';
+               type = 'warning';
+               reasonText = `LSTM forecasts drop to ${predPrice} (-${pct.toFixed(1)}%). Manage risk by reducing exposure.`;
+           } else {
+               action = 'HOLD';
+               type = 'tip';
+               reasonText = `Model predicts minor fluctuations around current price. Maintaining your current stance is optimal.`;
+           }
+        } else if (h.gainLossPercent < -10) {
           action = 'BUY';
           type = 'opportunity';
-          reason = `Current price is significantly below your average cost of $${h.avgCost.toFixed(2)}. This is an opportunity to average down.`;
-        } else if (h.mlPredictedPrice && h.mlPredictedPrice < h.currentPrice) {
-          action = 'SELL';
-          type = 'warning';
-          reason = `LSTM Model predicts a short-term drop to $${h.mlPredictedPrice.toFixed(2)}. You are currently up ${h.gainLossPercent.toFixed(2)}%. Consider taking profits.`;
+          reasonText = `Price is below your average cost of ${curr}${h.avgCost.toFixed(2)}. Opportunity to average down.`;
         } else if (h.gainLossPercent > 15) {
           action = 'SELL';
           type = 'warning';
-          reason = `You have strong unrealized gains of ${h.gainLossPercent.toFixed(2)}%. Recommendation to SELL some exposure to lock in profits.`;
+          reasonText = `Strong unrealized gains of ${h.gainLossPercent.toFixed(2)}%. Recommendation to secure profits.`;
         }
+
+        const formattedMessage = `Predicted Price: ${predPrice}\nCurrent Price: ${currentPriceStr}\nReason: ${reasonText}`;
 
         return {
           id: String(idx + 1),
           title: `${h.symbol} - ${action}`,
           type: type,
-          message: reason,
+          message: formattedMessage,
           timestamp: 'Just now',
           stocks: [h.symbol]
         };

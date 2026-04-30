@@ -20,7 +20,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/trademind', {
+const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/trademind';
+console.log('Connecting to MongoDB...', uri.substring(0, 20) + '...');
+
+mongoose.connect(uri, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })

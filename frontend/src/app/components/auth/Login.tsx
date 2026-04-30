@@ -4,13 +4,15 @@ import { Card } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
-import { Eye, EyeOff, TrendingUp } from "lucide-react";
+import { Eye, EyeOff, TrendingUp, Loader2 } from "lucide-react";
 import { AttractiveBackground } from "../AttractiveBackground";
 import { ThemeToggle } from "../ThemeToggle";
+import { API_ENDPOINTS } from "../../apiConfig";
 
 export function Login() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: ""
@@ -34,48 +36,51 @@ export function Login() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (validateForm()) {
-      // In a real app, this would be an API call to authenticate
-      // For demo purposes, we'll simulate a successful login
-      
-      // Check if there's an existing user profile from previous signup
-      const existingUser = localStorage.getItem('user');
-      const profile = localStorage.getItem('investorProfile');
-      
-      if (existingUser && profile) {
-        // User has completed signup and onboarding before
-        const userData = JSON.parse(existingUser);
-        userData.isNewUser = false;
-        localStorage.setItem('user', JSON.stringify(userData));
-        navigate('/dashboard');
-      } else if (existingUser && !profile) {
-        // User signed up but didn't complete onboarding
-        navigate('/onboarding');
-      } else {
-        // No existing user - create a demo user session
-        // In real app, this would come from API response
+      setLoading(true);
+      try {
+        const response = await fetch(`${API_ENDPOINTS.AUTH}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify({
+            fullName: data.user.name,
+            email: data.user.email,
+            isNewUser: false
+          }));
+          navigate('/dashboard');
+        } else {
+          setErrors({ auth: data.error || "Login failed. Please check your credentials." });
+        }
+      } catch (error) {
+        console.warn("Login API failed, falling back to Demo Mode:", error);
+        // DEMO FALLBACK: Allow login if server is offline
         localStorage.setItem('user', JSON.stringify({
           fullName: "Demo User",
           email: formData.email,
-          phone: "",
           isNewUser: false
         }));
-        
-        // Create a demo profile so they can access dashboard
-        localStorage.setItem('investorProfile', JSON.stringify({
-          experience: "intermediate",
-          riskTolerance: "moderate",
-          investmentGoal: "growth",
-          monthlyInvestment: "1000-2500",
-          timeHorizon: "medium",
-          tradingStyle: "swing",
-          createdAt: new Date().toISOString()
-        }));
-        
+        // Create mock profile if none exists
+        if (!localStorage.getItem('investorProfile')) {
+            localStorage.setItem('investorProfile', JSON.stringify({
+                experience: "intermediate",
+                riskTolerance: "moderate",
+                investmentGoal: "growth",
+                createdAt: new Date().toISOString()
+            }));
+        }
         navigate('/dashboard');
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -109,13 +114,18 @@ export function Login() {
               <TrendingUp className="w-10 h-10 text-white" />
             </div>
             <h1 className="text-6xl font-black bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent drop-shadow-sm tracking-tight text-foreground">
-              TradeAI
+              TradeMind AI
             </h1>
           </div>
           <p className="text-muted-foreground text-xl font-medium">Welcome back! Please log in to continue</p>
         </div>
 
         <Card className="p-10 bg-card/90 backdrop-blur-xl border-border/50 shadow-[0_0_50px_rgba(0,0,0,0.3)] premium-card rounded-3xl">
+          {errors.auth && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-red-500 text-sm font-bold text-center">
+              {errors.auth}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email */}
             <div>
@@ -173,8 +183,12 @@ export function Login() {
             </div>
 
             {/* Submit Button */}
-            <Button type="submit" className="w-full mt-8 h-16 text-xl font-black rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-xl shadow-primary/20 hover:scale-[1.02] transition-transform">
-              Log In
+            <Button 
+              type="submit" 
+              disabled={loading}
+              className="w-full mt-8 h-16 text-xl font-black rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-xl shadow-primary/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Log In"}
             </Button>
           </form>
 

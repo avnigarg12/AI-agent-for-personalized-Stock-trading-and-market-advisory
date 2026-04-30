@@ -18,7 +18,7 @@ export function Home() {
             <TrendingUp className="w-8 h-8 text-white" />
           </div>
           <span className="text-5xl font-black tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent drop-shadow-sm">
-            TradeAI
+            TradeMind AI
           </span>
         </div>
         <div className="absolute right-8 flex gap-5 items-center">

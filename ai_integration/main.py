@@ -10,10 +10,6 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent))
 
-from services.prediction_service import get_stock_prediction, get_technical_analysis
-from services.profiling_service import build_investor_profile
-from services.recommendation_service import generate_recommendation
-from services.market_data_service import get_stock_info, get_historical_data, get_trending_stocks
 from utils.logger import setup_logger
 
 logger = setup_logger('trademind_ai')
@@ -21,6 +17,7 @@ logger = setup_logger('trademind_ai')
 def handle_profile_request(data):
     """Handle investor profiling request"""
     try:
+        from services.profiling_service import build_investor_profile
         result = build_investor_profile(data)
         return result
     except Exception as e:
@@ -30,6 +27,7 @@ def handle_profile_request(data):
 def handle_recommendation_request(data):
     """Handle portfolio recommendation request"""
     try:
+        from services.recommendation_service import generate_recommendation
         profile = data.get('profile')
         market_data = data.get('market_data')
         portfolio_value = data.get('portfolio_value', 10000)
@@ -43,6 +41,9 @@ def handle_recommendation_request(data):
 def handle_prediction_request(data):
     """Handle stock prediction request"""
     try:
+        from services.prediction_service import get_stock_prediction
+        from services.market_data_service import get_historical_data
+        
         prices = data.get('prices', [])
         symbol = data.get('symbol')
         
@@ -62,6 +63,7 @@ def handle_prediction_request(data):
 def handle_market_data_request(data):
     """Handle market data requests"""
     try:
+        from services.market_data_service import get_stock_info, get_historical_data, get_trending_stocks
         sub_action = data.get('sub_action')
         symbol = data.get('symbol')
         

@@ -1,37 +1,37 @@
 const aiIntegrationService = require('../services/aiIntegrationService');
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1/models';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Try models in order of preference (verified available for this API key)
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+async function callGroq(prompt) {
+    if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY is not defined in .env');
+    try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${GROQ_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7,
+                max_tokens: 1024
+            })
+        });
 
-async function callGemini(prompt) {
-    for (const model of MODELS) {
-        try {
-            const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-                })
-            });
-
-            if (!res.ok) {
-                const errBody = await res.json().catch(() => ({}));
-                console.warn(`Model ${model} failed (${res.status}):`, errBody?.error?.message);
-                continue; // try next model
-            }
-
-            const data = await res.json();
-            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) return { text, model };
-        } catch (err) {
-            console.warn(`Model ${model} threw error:`, err.message);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err?.error?.message || `Groq API Error: ${res.status}`);
         }
+
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (!text) throw new Error('Empty response from Groq');
+        return { text, model: 'llama-3.3-70b-versatile' };
+    } catch (err) {
+        console.warn(`Groq API threw error:`, err.message);
+        throw err;
     }
-    throw new Error('All Gemini models failed or quota exhausted');
 }
 
 exports.getAIInsights = async (req, res) => {
@@ -91,9 +91,9 @@ Use each type exactly once. Make the insights genuinely useful based on the actu
 
 Respond ONLY with valid JSON array, no markdown, no explanation.`;
 
-        // Step 3: Call Gemini API via REST
-        const { text, model: usedModel } = await callGemini(prompt);
-        console.log(`Gemini insights generated using model: ${usedModel}`);
+        // Step 3: Call Groq API via REST
+        const { text, model: usedModel } = await callGroq(prompt);
+        console.log(`Groq insights generated using model: ${usedModel}`);
 
         // Step 4: Parse and validate the response
         let insights;
@@ -118,7 +118,7 @@ Respond ONLY with valid JSON array, no markdown, no explanation.`;
             }));
 
         } catch (parseError) {
-            console.error('Failed to parse Gemini response:', text);
+            console.error('Failed to parse Groq response:', text);
             throw new Error('AI returned invalid JSON');
         }
 

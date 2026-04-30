@@ -6,12 +6,19 @@ import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Switch } from "./ui/switch";
 import { Slider } from "./ui/slider";
-import { User, Target, TrendingUp, Bell, Shield } from "lucide-react";
+import { User, Target, Bell, Shield, Loader2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { userProfile } from "../data/mockData";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function Settings() {
+  const [profile, setProfile] = useState({
+    ...userProfile,
+    firstName: "Alex",
+    lastName: "Johnson",
+    email: "alex.johnson@example.com"
+  });
+
   const [notifications, setNotifications] = useState({
     priceAlerts: true,
     aiInsights: true,
@@ -19,7 +26,64 @@ export function Settings() {
     portfolioUpdates: false
   });
 
-  const [riskLevel, setRiskLevel] = useState(50); // 0-100 scale
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      const storedProfile = localStorage.getItem('investorProfile');
+      
+      let updatedProfile = { ...userProfile };
+
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        const fullName = user.fullName || user.name || "Alex Johnson";
+        const names = fullName.split(' ');
+        updatedProfile.name = fullName;
+        updatedProfile.firstName = names[0] || "Alex";
+        updatedProfile.lastName = names.slice(1).join(' ') || "Johnson";
+        updatedProfile.email = user.email || updatedProfile.email;
+      }
+
+      if (storedProfile) {
+        const parsed = JSON.parse(storedProfile);
+        updatedProfile = {
+          ...updatedProfile,
+          totalInvested: parseFloat(parsed.investedAmount) || updatedProfile.totalInvested,
+          portfolioValue: parseFloat(parsed.currentValue) || updatedProfile.portfolioValue,
+          riskTolerance: parsed.riskLevel || updatedProfile.riskTolerance,
+          tradingStyle: parsed.tradingStyle || updatedProfile.tradingStyle
+        };
+      }
+      
+      setProfile(updatedProfile);
+    } catch (e) {
+      console.error("Error loading settings", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const totalGainLossPercent = ((profile.portfolioValue - profile.totalInvested) / profile.totalInvested) * 100;
+  
+  // Risk Level calculation based on performance and profile
+  // High profit + aggressive style -> High Risk.
+  const calculateRiskScore = () => {
+    let score = 50; // Neutral
+    if (totalGainLossPercent > 10) score += 20;
+    if (totalGainLossPercent < -10) score -= 20;
+    if (profile.tradingStyle === 'day') score += 15;
+    if (profile.tradingStyle === 'longterm') score -= 15;
+    return Math.min(Math.max(score, 10), 90);
+  };
+
+  const riskScore = calculateRiskScore();
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-screen">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
 
   return (
     <div className="p-8 pt-0 text-foreground">
@@ -34,28 +98,22 @@ export function Settings() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-foreground">Profile Information</h3>
-                <p className="text-sm text-muted-foreground">Update your personal details</p>
+                <p className="text-sm text-muted-foreground">Actual user account details</p>
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" defaultValue="Alex" className="mt-1" />
-                </div>
-                <div>
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" defaultValue="Johnson" className="mt-1" />
-                </div>
+              <div>
+                <Label htmlFor="fullName">Full Name</Label>
+                <Input id="fullName" value={profile.name} readOnly className="mt-1 bg-muted/50" />
               </div>
               <div>
                 <Label htmlFor="email">Email Address</Label>
-                <Input id="email" type="email" defaultValue="alex.johnson@example.com" className="mt-1" />
+                <Input id="email" type="email" value={profile.email} readOnly className="mt-1 bg-muted/50" />
               </div>
               <div>
                 <Label htmlFor="experience">Trading Experience</Label>
-                <Select defaultValue={userProfile.experience}>
+                <Select defaultValue={profile.experience}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -70,126 +128,17 @@ export function Settings() {
             </div>
           </Card>
 
-          {/* Investment Goals */}
-          <Card className="p-6 bg-card border-border">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                <Target className="w-5 h-5 text-green-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-purple-400">Investment Goals</h3>
-                <p className="text-sm text-muted-foreground">Define what you want to achieve</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <Label className="mb-3 block">Primary Investment Goal</Label>
-                <RadioGroup defaultValue={userProfile.investmentGoal}>
-                  <div className="flex items-center space-x-2 p-3 border border-border rounded-lg hover:border-primary/50 transition-colors">
-                    <RadioGroupItem value="income" id="income" />
-                    <Label htmlFor="income" className="flex-1 cursor-pointer">
-                      <p className="font-medium">Income Generation</p>
-                      <p className="text-sm text-muted-foreground">Focus on dividends and regular returns</p>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 p-3 border border-border rounded-lg hover:border-primary/50 transition-colors">
-                    <RadioGroupItem value="growth" id="growth" />
-                    <Label htmlFor="growth" className="flex-1 cursor-pointer">
-                      <p className="font-medium">Capital Growth</p>
-                      <p className="text-sm text-muted-foreground">Build wealth through appreciation</p>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 p-3 border rounded-lg">
-                    <RadioGroupItem value="balanced" id="balanced" />
-                    <Label htmlFor="balanced" className="flex-1 cursor-pointer">
-                      <p className="font-medium">Balanced</p>
-                      <p className="text-sm text-muted-foreground">Mix of income and growth</p>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 p-3 border border-border rounded-lg hover:border-primary/50 transition-colors">
-                    <RadioGroupItem value="preservation" id="preservation" />
-                    <Label htmlFor="preservation" className="flex-1 cursor-pointer">
-                      <p className="font-medium">Capital Preservation</p>
-                      <p className="text-sm text-muted-foreground">Protect existing wealth</p>
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div>
-                <Label htmlFor="timeHorizon">Investment Time Horizon</Label>
-                <Select defaultValue="medium">
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="short">Short-term (0-2 years)</SelectItem>
-                    <SelectItem value="medium">Medium-term (2-5 years)</SelectItem>
-                    <SelectItem value="long">Long-term (5-10 years)</SelectItem>
-                    <SelectItem value="verylong">Very Long-term (10+ years)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </Card>
-
-          {/* Trading Style */}
-          <Card className="p-6 bg-card border-border">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-purple-400">Trading Style</h3>
-                <p className="text-sm text-muted-foreground">How do you prefer to trade?</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <RadioGroup defaultValue={userProfile.tradingStyle}>
-                <div className="flex items-center space-x-2 p-3 border border-border rounded-lg hover:border-primary/50 transition-colors">
-                  <RadioGroupItem value="day" id="day" />
-                  <Label htmlFor="day" className="flex-1 cursor-pointer">
-                    <p className="font-medium">Day Trading</p>
-                    <p className="text-sm text-muted-foreground">Open and close positions within the same day</p>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 p-3 border border-border rounded-lg hover:border-primary/50 transition-colors">
-                  <RadioGroupItem value="swing" id="swing" />
-                  <Label htmlFor="swing" className="flex-1 cursor-pointer">
-                    <p className="font-medium">Swing Trading</p>
-                    <p className="text-sm text-muted-foreground">Hold positions for days to weeks</p>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 p-3 border rounded-lg">
-                  <RadioGroupItem value="position" id="position" />
-                  <Label htmlFor="position" className="flex-1 cursor-pointer">
-                    <p className="font-medium">Position Trading</p>
-                    <p className="text-sm text-muted-foreground">Hold positions for weeks to months</p>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 p-3 border border-border rounded-lg hover:border-primary/50 transition-colors">
-                  <RadioGroupItem value="longterm" id="longterm" />
-                  <Label htmlFor="longterm" className="flex-1 cursor-pointer">
-                    <p className="font-medium">Long-term Investing</p>
-                    <p className="text-sm text-muted-foreground">Buy and hold for years</p>
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-          </Card>
-
-          {/* Risk Tolerance */}
-          <Card className="p-6 bg-card border-border">
+          {/* Risk Tolerance - AI Calculated (Read-only) */}
+          <Card className="p-6 bg-card border-border border-primary/20 bg-primary/5">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
                 <Shield className="w-5 h-5 text-orange-400" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-purple-400">Risk Tolerance</h3>
-                <p className="text-sm text-muted-foreground">How much risk are you comfortable with?</p>
+                <h3 className="text-lg font-semibold text-purple-400">AI Risk Assessment</h3>
+                <p className="text-sm text-muted-foreground">Calculated based on your portfolio and profile</p>
               </div>
+              <Badge variant="outline" className="ml-auto text-xs border-primary/30 text-primary">READ ONLY</Badge>
             </div>
 
             <div className="space-y-6">
@@ -197,19 +146,18 @@ export function Settings() {
                 <div className="flex justify-between items-center mb-3">
                   <Label>Risk Level</Label>
                   <Badge variant={
-                    riskLevel < 33 ? 'secondary' : 
-                    riskLevel < 66 ? 'default' : 
+                    riskScore < 33 ? 'secondary' : 
+                    riskScore < 66 ? 'default' : 
                     'destructive'
                   }>
-                    {riskLevel < 33 ? 'Conservative' : riskLevel < 66 ? 'Moderate' : 'Aggressive'}
+                    {riskScore < 33 ? 'Conservative' : riskScore < 66 ? 'Moderate' : 'Aggressive'}
                   </Badge>
                 </div>
                 <Slider
-                  value={[riskLevel]}
-                  onValueChange={(value) => setRiskLevel(value[0])}
+                  value={[riskScore]}
                   max={100}
                   step={1}
-                  className="mb-2"
+                  className="mb-2 opacity-70 pointer-events-none"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground mt-2">
                   <span>Low Risk</span>
@@ -220,26 +168,11 @@ export function Settings() {
 
               <div className="p-4 bg-muted/30 border border-border rounded-lg">
                 <p className="text-sm text-foreground">
-                  {riskLevel < 33 && "You prefer stable, low-risk investments with predictable returns. The AI will suggest blue-chip stocks, bonds, and dividend-paying companies."}
-                  {riskLevel >= 33 && riskLevel < 66 && "You're comfortable with moderate risk for potential higher returns. The AI will balance growth stocks with stable investments."}
-                  {riskLevel >= 66 && "You're willing to take higher risks for potentially higher rewards. The AI will suggest growth stocks, emerging sectors, and volatile opportunities."}
+                  <span className="font-bold text-primary">AI Evaluation: </span>
+                  {riskScore < 33 && "Your current holdings and strategy indicate a conservative approach. TradeMind AI will continue to suggest stable, low-volatility assets."}
+                  {riskScore >= 33 && riskScore < 66 && "Your portfolio demonstrates a balanced risk-reward profile. AI insights will focus on maintaining this equilibrium."}
+                  {riskScore >= 66 && "You are currently positioned in a high-growth, high-risk state. AI will monitor for significant volatility alerts."}
                 </p>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Maximum Acceptable Loss per Trade</Label>
-                <Select defaultValue="7-10">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2-5">2-5% (Very Conservative)</SelectItem>
-                    <SelectItem value="5-7">5-7% (Conservative)</SelectItem>
-                    <SelectItem value="7-10">7-10% (Moderate)</SelectItem>
-                    <SelectItem value="10-15">10-15% (Aggressive)</SelectItem>
-                    <SelectItem value="15+">15%+ (Very Aggressive)</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
           </Card>
@@ -322,41 +255,21 @@ export function Settings() {
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Name</p>
-                <p className="font-medium text-foreground">{userProfile.name}</p>
+                <p className="font-medium text-foreground">{profile.name}</p>
               </div>
               
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Risk Tolerance</p>
-                <Badge variant="default" className="capitalize">{userProfile.riskTolerance}</Badge>
-              </div>
-              
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Investment Goal</p>
-                <Badge variant="secondary" className="capitalize">{userProfile.investmentGoal}</Badge>
-              </div>
-              
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Trading Style</p>
-                <Badge variant="outline" className="capitalize">{userProfile.tradingStyle}</Badge>
-              </div>
-              
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Experience Level</p>
-                <Badge variant="outline" className="capitalize">{userProfile.experience}</Badge>
+                <p className="text-sm text-muted-foreground mb-1">AI Risk Assessment</p>
+                <Badge variant="default" className="capitalize">
+                  {riskScore < 33 ? 'Conservative' : riskScore < 66 ? 'Moderate' : 'Aggressive'}
+                </Badge>
               </div>
             </div>
-
-            <div className="mt-6 pt-6 border-t border-border">
-              <p className="text-sm text-muted-foreground mb-2">Portfolio Value</p>
-              <p className="text-2xl font-bold text-foreground">
-                ${userProfile.portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-
+            
             <div className="mt-6 p-4 bg-primary/10 rounded-lg border border-primary/20">
               <p className="text-sm font-semibold text-foreground mb-2">💡 AI Personalization</p>
               <p className="text-xs text-muted-foreground">
-                Your settings help the AI provide tailored recommendations that match your goals, risk tolerance, and trading style.
+                Your calculated risk and profile help TradeMind AI provide tailored recommendations.
               </p>
             </div>
           </Card>

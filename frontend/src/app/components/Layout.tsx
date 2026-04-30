@@ -62,8 +62,8 @@ export function Layout() {
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/advisor", label: "AI Advisory", icon: MessageSquare },
-    { to: "/market", label: "Market Analysis", icon: TrendingUp },
     { to: "/portfolio", label: "Portfolio", icon: Briefcase },
+    { to: "/market", label: "Market Analysis", icon: TrendingUp },
     { to: "/settings", label: "Settings", icon: Settings },
   ];
 
@@ -78,7 +78,7 @@ export function Layout() {
             <TrendingUp className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-purple-400 to-indigo-400 bg-clip-text text-transparent tracking-tight flex-1">
-            TradeAI
+            TradeMind AI
           </h1>
         </div>
 
@@ -136,7 +136,7 @@ export function Layout() {
               key={location.pathname}
               className="text-xl md:text-2xl font-black bg-gradient-to-r from-primary via-purple-400 to-indigo-400 bg-clip-text text-transparent tracking-tight"
             >
-              {location.pathname === '/dashboard' ? (userName ? `Welcome ${userName}!` : 'Welcome!') : navItems.find(i => i.to === location.pathname)?.label || 'TradeAI'}
+              {location.pathname === '/dashboard' ? (userName ? `Welcome ${userName}!` : 'Welcome!') : navItems.find(i => i.to === location.pathname)?.label || 'TradeMind AI'}
             </motion.h2>
 
             <Button
