@@ -22,7 +22,7 @@ RUN npm install
 
 # Install Python dependencies
 WORKDIR /app/ai_integration
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
 # Set the working directory back to backend
 WORKDIR /app/backend
