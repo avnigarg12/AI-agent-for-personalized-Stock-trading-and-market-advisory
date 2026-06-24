@@ -89,18 +89,6 @@ npm run dev
 
 ---
 
-## 🎯 Deployment Guide
-
-### Frontend (Vercel/Netlify)
-1. Set the build command to `npm run build`.
-2. Set the output directory to `dist`.
-3. Configure `VITE_API_URL` to point to your deployed backend.
-
-### Backend (Render/Heroku/AWS)
-1. Ensure the environment has **Python 3.12** installed.
-2. Install Python dependencies: `pip install yfinance tensorflow pandas numpy scikit-learn`.
-3. Set all environment variables in your hosting provider's dashboard.
-4. Set `PYTHON_PATH` to the location of the python executable on the server (usually `/usr/bin/python3`).
 
 ---
 
