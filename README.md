@@ -2,14 +2,9 @@
 
 TradeMind AI is a comprehensive, AI-powered stock market trading and advisory platform. It combines real-time market data, advanced machine learning for price prediction, and a conversational AI advisor to help users make smarter investment decisions.
 
+
 ---
-
-## 🚀 Deployment Status: Ready for Production
-
-The project has been optimized for performance and is ready for deployment. All core systems (Frontend, Backend, and AI Integration) are fully functional.
-
-### Key Optimization: Lazy-Loading AI Models
-We have implemented a **Lazy Loading** mechanism for the AI Integration engine. This ensures that heavy libraries like TensorFlow/Keras are only loaded when a prediction is requested, preventing process timeouts and significantly improving the responsiveness of the Node.js backend when communicating with the Python sub-processes.
+Live Demo -https://starlit-zabaione-e8a9f7.netlify.app/
 
 ---
 
